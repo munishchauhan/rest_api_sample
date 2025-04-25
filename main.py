@@ -4,6 +4,7 @@ from flask import Flask, jsonify, make_response, send_from_directory
 from flask_swagger_ui import get_swaggerui_blueprint
 from routes import request_api
 import pypyodbc as odbc #pip install pypyodbc
+import pandas as pd
 
 DRIVER_NAME = 'SQL SERVER'
 SERVER_NAME = 'HP-Elitebook'
@@ -47,20 +48,40 @@ def hello_world():
 
 @app.route('/api/users/<string:name>')
 def get_users(name):
+
+    # --- Step 1: Excel Load ---
+    df = pd.read_excel('Import Items Template.xlsx', engine='openpyxl')
+    print(df.head())
+
     conn = odbc.connect(connection_string)
     cursor = conn.cursor()
 
-    cursor.execute("SELECT * FROM tbCountryList")
-    list = cursor.fetchall()   
+    #--- Step 3: Insert Rows ---
+    for index, row in df.iterrows():
+        cursor.execute("""
+            INSERT INTO tbCountryList (VCountryName, CurrencySymbol, CurrencyName)
+            VALUES (?, ?, ?)
+        """, (
+            str(row["Item code"]) if not pd.isna(row["Item code"]) else None,
+            str(row["Category"]) if not pd.isna(row["Category"]) else None,
+            str(row["HSN"]) if not pd.isna(row["HSN"]) else None
+        ))
 
+    conn.commit()
+    cursor.close()
     conn.close()
 
-    return jsonify(list)
+    # cursor.execute("SELECT * FROM tbCountryList")
+    # list = cursor.fetchall()   
+
+    # conn.close()
+
+    # return jsonify(list)
 
     # return jsonify({
     #     "name": f"Hello {name}"
     # })
-
+    return jsonify({"status": "success", "message": "Excel data imported"}) 
 
 if __name__ == "__main__":
     app.run(debug=True)
